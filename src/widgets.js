@@ -1,169 +1,355 @@
 // -----------------------------------------------------------------------------
-// Dashboard widgets (SDK v0.14+, Gladys 5.1+).
+// The "ecobee thermostat" dashboard widget: the temperature, the setpoint(s)
+// and the humidity as live tiles, the mode, what runs, the comfort setting
+// and the hold in a status list, and four buttons: lower, raise, mode (a
+// form), comfort setting (a form). Forms on a widget button need Gladys
+// 5.2.0 (#3168); the manifest requires it anyway for the thermostat preset.
 //
-// A widget puts the integration's own data on the Gladys dashboard without a
-// dedicated core widget. The manifest `widgets` field declares its identity
-// (key, label, icon, optional per-instance `settings`); at runtime the
-// integration returns a DECLARATIVE content — `text`, `value`, `gauge`,
-// `status`, `chart`, `card-list`, `image`, `button` — that the core renders
-// with its own theme, dark mode and translations. No HTML, no CSS.
-//
-// Each entry of WIDGETS is keyed by the widget `key` and exposes:
-//   - get(gladys, { settings, language, units, config }): the content,
-//     registered by index.js with `gladys.onWidgetGet(key, ...)`;
-//   - action(gladys, { actionKey, params, settings, config }) (optional): a
-//     tapped `button` carrying an `action`, registered with
-//     `gladys.onWidgetAction`.
-//
-// Check your contents in the tests with `validateWidgetContent` (exported by
-// the SDK, see test/widgets.test.js), or run with DEBUG=gladys-integration-sdk
-// to have the SDK log every violation of the vocabulary and the budget.
+// Budget of the core: 8 components, 6 tiles, 1 status, 4 buttons. Texts are
+// in the language of the dashboard (`language` of the request).
 // -----------------------------------------------------------------------------
 
+import { WIDGET_COLORS } from '@gladysassistant/integration-sdk';
+import { CommandError, climateCommand, modeCommand, resumeCommand } from './commands.js';
+import { THERMOSTAT_FEATURE, holdText, thermostatIds } from './devices.js';
 import {
-  createLogger,
-  DEVICE_FEATURE_CATEGORIES,
-  DEVICE_TRANSPORTS,
-  WIDGET_COLORS,
-} from '@gladysassistant/integration-sdk';
-import { identifyDevice } from './devices/index.js';
-import { weatherStation } from './devices/weatherStation.js';
-import { plug } from './devices/plug.js';
-import { light } from './devices/light.js';
+  effectiveClimate,
+  fromTenths,
+  holdParams,
+  setpointStep,
+  STANDARD_CLIMATES,
+  toTenths,
+} from './ecobee/model.js';
+import { LABELS, MESSAGES, TEXT, failure, pick } from './i18n.js';
 
-const logger = createLogger({ name: 'widgets' });
+export const WIDGET = { THERMOSTAT: 'thermostat' };
 
-// Widget key, as declared in the manifest `widgets` field.
-export const DEMO_STATUS_WIDGET = 'demo_status';
+/** The widget button action keys (unique: the core drops a duplicate). */
+export const ACTION = { LOWER: 'lower', RAISE: 'raise', MODE: 'mode', COMFORT: 'comfort' };
 
-// Keys of the `button` actions the demo_status content declares.
-const DEMO_STATUS_ACTIONS = { IDENTIFY_LIGHT: 'identify_light' };
+const SCHEDULE = 'schedule';
 
-// How the plug transport reads in the status list.
-const TRANSPORT_STATUS = {
-  [DEVICE_TRANSPORTS.LOCAL]: { value: { en: 'Local', fr: 'Locale' }, color: WIDGET_COLORS.SUCCESS },
-  [DEVICE_TRANSPORTS.CLOUD]: { value: { en: 'Cloud', fr: 'Cloud' }, color: WIDGET_COLORS.INFO },
-  [DEVICE_TRANSPORTS.UNREACHABLE]: {
-    value: { en: 'Unreachable', fr: 'Injoignable' },
-    color: WIDGET_COLORS.DANGER,
-  },
-};
+const text = (body, variant = 'body') => ({ type: 'text', text: body, variant });
 
-// A live tile references a feature by its external_id: read it from the
-// discovery payload itself, so the widget and the device never disagree.
-function featureExternalId(gladys, config, blueprint, category) {
-  const device = blueprint.buildDevice(gladys, config);
-  return device.features.find((feature) => feature.category === category).external_id;
-}
-
-function plugConnectionStatus(gladys, config) {
-  const { transport, degraded } = plug.transport(gladys, config);
-  const { value, color } = TRANSPORT_STATUS[transport];
-  if (degraded) {
-    return {
-      value: { en: `${value.en} (degraded mode)`, fr: `${value.fr} (mode dégradé)` },
-      color: WIDGET_COLORS.WARNING,
-    };
+/** Which setpoints the dial moves in the current mode. */
+function activeSides(snapshot) {
+  switch (snapshot.hvacMode) {
+    case 'heat':
+    case 'auxHeatOnly':
+      return ['heat'];
+    case 'cool':
+      return ['cool'];
+    case 'auto':
+      return ['heat', 'cool'];
+    default:
+      return [];
   }
-  return { value, color };
 }
 
-export const WIDGETS = {
-  [DEMO_STATUS_WIDGET]: {
-    // `settings` holds the per-instance values of the declared `settings`
-    // (none here); `language` and `units` are those of the user viewing the
-    // dashboard, for the values you format yourself. Multi-language objects
-    // (`{ en, fr }`) are picked by the core, like everywhere else.
-    async get(gladys, { config }) {
-      logger.debug(`onWidgetGet <- ${DEMO_STATUS_WIDGET}`);
-      return {
-        // Reload policy: the computed parts below only change with the
-        // config, and index.js nudges the widget on every (re)connection and
-        // config update (see refreshWidgets) — the TTL is just a safety net.
-        ttl_seconds: 300,
-        components: [
-          // Device-bound tiles: LIVE, they follow the published states over
-          // the core's real-time path. No TTL, no nudge involved.
-          {
-            type: 'value',
-            label: { en: 'Temperature', fr: 'Température' },
-            icon: 'thermometer',
-            device_feature: featureExternalId(
-              gladys,
-              config,
-              weatherStation,
-              DEVICE_FEATURE_CATEGORIES.TEMPERATURE_SENSOR,
-            ),
-          },
-          {
-            type: 'value',
-            label: { en: 'Office plug', fr: 'Prise du bureau' },
-            icon: 'zap',
-            device_feature: featureExternalId(
-              gladys,
-              config,
-              plug,
-              DEVICE_FEATURE_CATEGORIES.ENERGY_SENSOR,
-            ),
-          },
-          // Computed rows: what the integration knows that no device feature
-          // carries. Served from the core cache until the TTL or a nudge.
-          {
-            type: 'status',
-            items: [
-              {
-                label: { en: 'Plug connection', fr: 'Connexion de la prise' },
-                icon: 'wifi',
-                ...plugConnectionStatus(gladys, config),
-              },
-              {
-                label: { en: 'Observed location', fr: 'Position observée' },
-                icon: 'map-pin',
-                value: `${config.latitude.toFixed(2)}, ${config.longitude.toFixed(2)}`,
-                color: WIDGET_COLORS.NEUTRAL,
-              },
-            ],
-          },
-          // `params` are declared HERE and sent back as-is: the handler never
-          // receives user input (a dashboard can hang on a public wall).
-          {
-            type: 'button',
-            label: { en: 'Identify the light', fr: 'Identifier la lampe' },
-            icon: 'eye',
-            style: 'secondary',
-            action: {
-              key: DEMO_STATUS_ACTIONS.IDENTIFY_LIGHT,
-              params: { device: light.deviceExternalId(gladys) },
-            },
-          },
-        ],
-      };
-    },
+function stateLabel(snapshot, language) {
+  if (snapshot.operatingState === 1)
+    return { value: pick(TEXT.heating, language), color: WIDGET_COLORS.WARNING };
+  if (snapshot.operatingState === 2)
+    return { value: pick(TEXT.cooling, language), color: WIDGET_COLORS.INFO };
+  if (snapshot.fanRunning)
+    return { value: pick(TEXT.fanOnly, language), color: WIDGET_COLORS.PRIMARY };
+  return { value: pick(TEXT.idle, language), color: WIDGET_COLORS.NEUTRAL };
+}
 
-    // Resolve an optional toast (string or multi-language object, ≤ 200
-    // characters). After a successful action the core drops the cached
-    // content and every open dashboard refetches it: no nudge needed.
-    async action(gladys, { actionKey, params, config }) {
-      logger.info(`onWidgetAction <- ${DEMO_STATUS_WIDGET}.${actionKey}`);
-      if (actionKey === DEMO_STATUS_ACTIONS.IDENTIFY_LIGHT) {
-        return identifyDevice(gladys, params.device, config);
-      }
-      // Throwing acks the action as failed: the message reaches the user.
-      throw new Error(`Unknown widget action: ${actionKey}`);
-    },
-  },
-};
+function modeLabel(mode, language) {
+  const labels = LABELS[language] ?? LABELS.en;
+  return mode === 'auxHeatOnly' ? `${labels.heat} (aux)` : labels[mode];
+}
+
+/** A label of the LABELS tables, as the multi-language object a form needs. */
+const label = (key) =>
+  Object.fromEntries(Object.entries(LABELS).map(([lang, labels]) => [lang, labels[key]]));
+
+/** The modes the form offers on this thermostat. */
+function modeChoices(snapshot) {
+  return [
+    { value: 'off', label: label('off') },
+    ...(snapshot.canHeat ? [{ value: 'heat', label: label('heat') }] : []),
+    ...(snapshot.canCool ? [{ value: 'cool', label: label('cool') }] : []),
+    ...(snapshot.canHeat && snapshot.canCool ? [{ value: 'auto', label: label('auto') }] : []),
+  ];
+}
+
+/** The comfort settings the form offers: the program, then Home / Away / Sleep. */
+function comfortChoices(snapshot) {
+  return [
+    { value: SCHEDULE, label: label('schedule') },
+    ...STANDARD_CLIMATES.map((ref) => snapshot.climates.find((climate) => climate.ref === ref))
+      .filter(Boolean)
+      // The names the user gave in ecobee, in no particular language.
+      .map((climate) => ({ value: climate.ref, label: { en: climate.name.slice(0, 60) } })),
+  ];
+}
 
 /**
- * Freshness nudge: ask the core to re-pull every widget NOW instead of
- * waiting for the content TTL. Call it when you KNOW a computed content
- * changed (here: the config, which drives the plug transport and the observed
- * location) — and after every (re)connection, since the nudges are
- * fire-and-forget: rate-limited core-side to 1 per 10 s per widget, dropped
- * silently while disconnected.
+ * The content of the widget.
+ * @param {object} hub
+ * @param {object} request { settings, language }
  */
-export function refreshWidgets(gladys) {
-  for (const key of Object.keys(WIDGETS)) {
-    gladys.requestWidgetRefresh(key);
+export function thermostatContent(hub, { settings = {}, language = 'en' }) {
+  if (!settings.thermostat) {
+    return { ttl_seconds: 300, components: [text(pick(TEXT.pickThermostat, language))] };
+  }
+  if (!hub.session.signedIn) {
+    return { ttl_seconds: 60, components: [text(pick(TEXT.notSignedIn, language))] };
+  }
+  const snapshot = hub.snapshotOf(settings.thermostat);
+  if (!snapshot) {
+    return {
+      ttl_seconds: 30,
+      components: [
+        text(pick(hub.snapshots.size ? TEXT.thermostatNotFound : TEXT.waiting, language)),
+      ],
+    };
+  }
+  const ids = thermostatIds(hub.gladys, snapshot);
+  const sides = activeSides(snapshot);
+  const tiles = [
+    {
+      type: 'value',
+      label: pick(TEXT.temperature, language),
+      icon: 'thermometer',
+      device_feature: ids.feature(THERMOSTAT_FEATURE.TEMPERATURE),
+    },
+  ];
+  for (const side of sides) {
+    tiles.push({
+      type: 'value',
+      label: pick(side === 'heat' ? TEXT.heatTo : TEXT.coolTo, language),
+      icon: side === 'heat' ? 'sun' : 'wind',
+      device_feature: ids.feature(
+        side === 'heat' ? THERMOSTAT_FEATURE.HEAT_SETPOINT : THERMOSTAT_FEATURE.COOL_SETPOINT,
+      ),
+    });
+  }
+  // Budget: 3 tiles + 1 status + 4 buttons = 8 components. In auto mode the
+  // two setpoints take the room of the humidity tile, which moves to the status.
+  const humidityTile = snapshot.humidity !== null && tiles.length < 3;
+  if (humidityTile) {
+    tiles.push({
+      type: 'value',
+      label: pick(TEXT.humidity, language),
+      icon: 'droplet',
+      device_feature: ids.feature(THERMOSTAT_FEATURE.HUMIDITY),
+    });
+  }
+
+  const running = stateLabel(snapshot, language);
+  const climate = effectiveClimate(snapshot);
+  const items = [
+    {
+      label: pick(TEXT.mode, language),
+      value: modeLabel(snapshot.hvacMode, language),
+      icon: 'settings',
+      color: snapshot.hvacMode === 'off' ? WIDGET_COLORS.NEUTRAL : WIDGET_COLORS.SUCCESS,
+    },
+    {
+      label: pick(TEXT.state, language),
+      value: running.value,
+      icon: 'activity',
+      color: running.color,
+    },
+    ...(climate
+      ? [
+          {
+            label: pick(TEXT.comfort, language),
+            value: climate.name.slice(0, 40),
+            icon: 'home',
+            color: WIDGET_COLORS.NEUTRAL,
+          },
+        ]
+      : []),
+    {
+      label: pick(TEXT.hold, language),
+      value: holdText(snapshot, language).slice(0, 40),
+      icon: 'clock',
+      color: snapshot.override.kind === 'none' ? WIDGET_COLORS.NEUTRAL : WIDGET_COLORS.WARNING,
+    },
+  ];
+  if (snapshot.humidity !== null && !humidityTile) {
+    items.push({
+      label: pick(TEXT.humidity, language),
+      value: `${snapshot.humidity} %`,
+      icon: 'droplet',
+      color: WIDGET_COLORS.NEUTRAL,
+    });
+  }
+  if (!snapshot.connected) {
+    items.unshift({
+      label: pick(TEXT.connection, language),
+      value: pick(TEXT.offline, language),
+      icon: 'wifi-off',
+      color: WIDGET_COLORS.DANGER,
+    });
+  }
+
+  const currentMode = snapshot.hvacMode === 'auxHeatOnly' ? 'heat' : snapshot.hvacMode;
+  const currentComfort =
+    snapshot.override.kind === 'climate' ? snapshot.override.climateRef : SCHEDULE;
+  const buttons = [];
+  if (sides.length > 0) {
+    buttons.push(
+      {
+        type: 'button',
+        label: pick(TEXT.lower, language),
+        icon: 'minus',
+        style: 'secondary',
+        action: { key: ACTION.LOWER },
+      },
+      {
+        type: 'button',
+        label: pick(TEXT.raise, language),
+        icon: 'plus',
+        style: 'secondary',
+        action: { key: ACTION.RAISE },
+      },
+    );
+  }
+  buttons.push(
+    {
+      type: 'button',
+      label: pick(TEXT.modeButton, language),
+      icon: 'sliders',
+      style: 'secondary',
+      action: {
+        key: ACTION.MODE,
+        fields: [
+          {
+            key: 'mode',
+            type: 'select',
+            required: true,
+            default: currentMode,
+            label: TEXT.mode,
+            options: modeChoices(snapshot),
+          },
+        ],
+      },
+    },
+    {
+      type: 'button',
+      label: pick(TEXT.comfortButton, language),
+      icon: 'home',
+      style: 'secondary',
+      action: {
+        key: ACTION.COMFORT,
+        fields: [
+          {
+            key: 'comfort',
+            type: 'select',
+            required: true,
+            default: comfortChoices(snapshot).some((choice) => choice.value === currentComfort)
+              ? currentComfort
+              : SCHEDULE,
+            label: TEXT.comfort,
+            options: comfortChoices(snapshot),
+          },
+        ],
+      },
+    },
+  );
+  return { ttl_seconds: 120, components: [...tiles, { type: 'status', items }, ...buttons] };
+}
+
+/** One step of the dial on the setpoints the mode uses. */
+function stepCommand(hub, snapshot, direction) {
+  const sides = activeSides(snapshot);
+  if (sides.length === 0) {
+    throw new CommandError(TEXT.thermostatIsOff);
+  }
+  const unit = hub.unitOf(snapshot);
+  const step = setpointStep(unit) * direction;
+  const clamp = (value, [low, high]) => Math.min(high, Math.max(low, value));
+  const moved = (tenths, range) =>
+    clamp(toTenths(fromTenths(tenths, unit, setpointStep(unit)) + step, unit), range);
+  let heat = snapshot.desiredHeat ?? snapshot.heatRange[0];
+  let cool = snapshot.desiredCool ?? snapshot.coolRange[1];
+  if (sides.length === 2) {
+    // Auto: both move, the gap between them stays.
+    heat = moved(heat, snapshot.heatRange);
+    cool = Math.max(moved(cool, snapshot.coolRange), heat + snapshot.heatCoolMinDelta);
+  } else if (sides[0] === 'heat') {
+    heat = moved(heat, snapshot.heatRange);
+    cool = heat;
+  } else {
+    cool = moved(cool, snapshot.coolRange);
+    heat = cool;
+  }
+  return {
+    update: {
+      functions: [
+        {
+          type: 'setHold',
+          params: {
+            ...holdParams(hub.config.hold_duration, snapshot),
+            heatHoldTemp: heat,
+            coolHoldTemp: cool,
+          },
+        },
+      ],
+    },
+    shown: fromTenths(sides[0] === 'cool' ? cool : heat, unit, setpointStep(unit)),
+    unit,
+  };
+}
+
+/**
+ * A button of the widget.
+ * @param {object} hub
+ * @param {object} request { actionKey, settings, values, language }
+ */
+export async function thermostatAction(hub, { actionKey, settings = {}, values, language }) {
+  const lang = language ?? hub.language;
+  const snapshot = hub.commandTarget(settings.thermostat);
+  try {
+    switch (actionKey) {
+      case ACTION.LOWER:
+      case ACTION.RAISE: {
+        const { update, shown, unit } = stepCommand(
+          hub,
+          snapshot,
+          actionKey === ACTION.RAISE ? 1 : -1,
+        );
+        hub.logger.info(`Widget: setpoint ${shown} on ${snapshot.name}`);
+        await hub.send(snapshot, update);
+        return MESSAGES.setpointSet(`${shown} ${unit === 'celsius' ? '°C' : '°F'}`);
+      }
+      case ACTION.MODE: {
+        // An older core drops the form and sends no values: refuse rather than guess.
+        if (!values?.mode) {
+          throw new CommandError(TEXT.commandFailed);
+        }
+        const gladysMode = { off: 0, heat: 1, cool: 2, auto: 3 }[values.mode];
+        const update = modeCommand(snapshot, gladysMode);
+        hub.logger.info(`Widget: mode ${values.mode} on ${snapshot.name}`);
+        await hub.send(snapshot, update);
+        return undefined;
+      }
+      case ACTION.COMFORT: {
+        if (!values?.comfort) {
+          throw new CommandError(TEXT.commandFailed);
+        }
+        const update =
+          values.comfort === SCHEDULE
+            ? resumeCommand(snapshot)
+            : climateCommand(snapshot, values.comfort, hub.config.hold_duration);
+        hub.logger.info(`Widget: comfort setting ${values.comfort} on ${snapshot.name}`);
+        await hub.send(snapshot, update);
+        return undefined;
+      }
+      default:
+        throw new CommandError(TEXT.commandFailed);
+    }
+  } catch (err) {
+    throw err instanceof CommandError ? failure(err.text, lang) : err;
   }
 }
+
+/** The widgets of the manifest, by key. */
+export const WIDGETS = {
+  [WIDGET.THERMOSTAT]: { get: thermostatContent, action: thermostatAction },
+};

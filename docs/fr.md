@@ -1,67 +1,180 @@
-# Template de démonstration
+# ecobee
 
-Ceci est la documentation utilisateur de l'intégration. Gladys ré-héberge ce
-fichier et affiche un lien **Documentation** permanent vers lui dans l'écran
-de configuration (dans la langue de l'utilisateur, avec l'anglais en repli) —
-c'est au moment de configurer que l'utilisateur en a le plus besoin. Gardez
-les courtes indications d'accueil dans les blocs `section` du `config_schema`
-du manifest ; mettez ici le pas-à-pas détaillé (captures d'écran, dépannage…).
+## 1. Présentation
 
-## Ce que vous obtenez
+Cette intégration amène vos **thermostats ecobee** et leurs **capteurs de pièce SmartSensor**
+dans Gladys : température, humidité, consignes de chauffage et de climatisation, mode, mode
+confort (Maison / Absent / Sommeil), maintiens, ce que fait l’installation et présence. Depuis
+Gladys, vous changez la consigne, le mode, la ventilation et le mode confort, reprenez le
+programme, et lancez ou annulez des vacances depuis une scène.
 
-Six appareils de démonstration apparaissent après l'installation : une
-station météo (vraies données Open-Meteo), un interrupteur, une lampe
-variable, une prise connectée avec mesure de puissance, un détecteur de
-mouvement et une caméra.
+Elle passe par le cloud ecobee, comme l’appli ecobee : le thermostat doit être connecté à
+internet.
 
-## Configuration
+> Développée sans le matériel : vos retours sont les bienvenus. Cette intégration n’a aucun lien
+> avec ecobee.
 
-1. Ouvrez l'onglet **Configuration** de l'intégration.
-2. Renseignez la **latitude** et la **longitude** que la station météo de
-   démonstration doit observer (Paris par défaut), et choisissez votre unité
-   de température. L'**intervalle de rafraîchissement** règle la fréquence
-   de lecture de la station météo et de la puissance de la prise : toutes
-   les 5 minutes par défaut, toutes les minutes au plus.
-3. Enregistrez : les appareils apparaissent dans l'onglet **Découverte**,
-   prêts à être ajoutés.
+## 2. Prérequis
 
-Le réglage **Préférer la connexion locale** pilote la prise de
-démonstration : elle affiche en badge le canal réellement utilisé (local ou
-cloud), avec un point orange quand elle fonctionne en mode dégradé (local
-refusé, bascule cloud).
+- Gladys Assistant **5.2.0** ou plus récent.
+- Un compte ecobee (celui de l’appli ecobee) avec au moins un thermostat.
+- Si votre compte utilise la validation en deux étapes : votre application d’authentification,
+  ou votre téléphone pour le code par SMS. Les notifications et les liens par e-mail ne sont pas
+  pris en charge.
+- Facultatif : une **clé d’API développeur**, si vous en avez encore une (ecobee n’en délivre plus
+  depuis 2024).
 
-## Actions
+## 3. Configuration
 
-- **Tester le fournisseur météo** — effectue une requête en direct vers
-  Open-Meteo et affiche la température et l'humidité actuelles sous le
-  bouton.
-- **Identifier un appareil** — choisissez un de vos appareils dans la liste
-  et il se signale (la lampe de démonstration « clignote » dans les logs).
+Installez l’intégration depuis le store des intégrations de Gladys, puis ouvrez son onglet
+**Configuration**.
 
-## Scènes
+**Connexion par compte ecobee (recommandée)**
 
-L'intégration ajoute ses propres cartes à l'éditeur de scènes (Gladys 5.1
-ou plus récent), dans la catégorie **Intégrations** :
+1. Saisissez l’**e-mail** et le **mot de passe** de l’appli ecobee, puis enregistrez.
+2. Sans validation en deux étapes, le statut passe au vert et les thermostats apparaissent dans
+   l’onglet **Découverte**.
+3. Avec validation en deux étapes, le statut demande le code : lancez l’action **Saisir le code
+   de vérification** avec le code à 6 chiffres de votre application d’authentification, ou du SMS
+   qu’ecobee vient d’envoyer (dans les 10 minutes).
 
-- **Mouvement détecté** (déclencheur) — lance la scène quand un détecteur
-  de démonstration voit bouger quelque chose. Choisissez éventuellement le
-  détecteur et ce qui a bougé (personne, animal) ; laissés vides, toute
-  détection correspond. Les actions suivantes peuvent lire ce qui a bougé
-  avec `{{triggerEvent.data.target}}`.
-- **Identifier un appareil** (action) — fait se signaler l'appareil choisi.
-  Elle indique si l'appareil a pu se signaler, pour que les actions
-  suivantes puissent en dépendre.
+L’intégration garde ensuite une session (jeton de renouvellement) dans son volume `/data` et la
+renouvelle seule. Le mot de passe reste dans la configuration de Gladys ; il ne sert à nouveau
+que si ecobee met fin à la session. **Se connecter et tester** lit les thermostats et indique
+combien ont été trouvés. **Se déconnecter** supprime la session conservée.
 
-## Tableau de bord
+**Avec une clé d’API développeur (facultatif)**
 
-Ajoutez le widget **État de la démo** à un tableau de bord : il affiche en
-direct la température de la station météo et la puissance de la prise du
-bureau, la connexion utilisée par la prise (en orange si dégradée) et la
-position observée. Son bouton **Identifier la lampe** fait se signaler la
-lampe de démonstration.
+Saisissez la clé dans **Clé d’API** et enregistrez (elle remplace l’e-mail et le mot de passe).
+Lancez **Obtenir un code PIN** : sur ecobee.com, ouvrez **My Apps**, **Add application**, et
+saisissez le code pendant sa validité. L’intégration détecte seule l’autorisation.
 
-## Dépannage
+**Réglages**
 
-L'intégration journalise tout ce qu'elle fait : consultez les logs de
-l'intégration depuis l'interface Gladys (ou `docker logs` sur l'hôte) avec
-`LOG_LEVEL=debug` pour le détail complet.
+- **Unité de température** : l’unité des fonctionnalités : celle affichée par le thermostat (par
+  défaut), Celsius ou Fahrenheit. Gladys convertit aussi les mesures dans l’unité préférée de
+  chaque utilisateur.
+- **Maintenir les changements faits depuis Gladys** : une consigne ou un mode confort changé
+  depuis Gladys est un _maintien_, comme dans l’appli ecobee. Par défaut il dure **jusqu’au
+  prochain changement du programme** ; vous pouvez choisir jusqu’à nouvel ordre, 2 heures,
+  4 heures, ou le réglage de maintien du thermostat.
+- **Intervalle de lecture** : la fréquence de lecture d’ecobee, 3 minutes au minimum.
+- **Langue des noms de fonctionnalités** : les noms donnés aux fonctionnalités à l’ajout d’un
+  appareil.
+
+Ajoutez ensuite les appareils depuis l’onglet **Découverte**.
+
+## 4. Appareils
+
+**Un appareil par thermostat**
+
+| Fonctionnalité            | Ce que c’est                                                                         |
+| ------------------------- | ------------------------------------------------------------------------------------ |
+| Température, Humidité     | mesures intérieures du thermostat                                                    |
+| Consigne de chauffage     | cible en chauffage (seulement si le thermostat pilote un chauffage)                  |
+| Consigne de climatisation | cible en climatisation (seulement s’il pilote une climatisation)                     |
+| Mode                      | arrêt, chauffage, climatisation, auto (selon l’installation)                         |
+| Chauffage d’appoint seul  | pompes à chaleur seulement : l’appoint chauffe seul (chauffage de secours)           |
+| État de fonctionnement    | au repos, en chauffe, en refroidissement                                             |
+| Ventilation permanente    | activée : la ventilation tourne en continu ; désactivée : automatique                |
+| Ventilation en marche     | la ventilation tourne en ce moment                                                   |
+| Mode confort              | programme (suivre le programme), Maison, Absent, Sommeil — l’écrire crée un maintien |
+| Mode confort en cours     | le nom du mode confort appliqué, y compris ceux que vous avez créés                  |
+| Maintien                  | ce qui prime : programme, maintien jusqu’à une heure, maintien permanent, vacances   |
+| Présence                  | le détecteur de présence du thermostat (absent sur l’ecobee3 lite)                   |
+
+Écrire **Programme** (valeur 0) sur le mode confort reprend le programme : tous les maintiens
+sont annulés, ainsi que des vacances en cours. En mode auto, la consigne de climatisation reste
+au-dessus de celle de chauffage d’au moins l’écart minimal du thermostat.
+
+**Un appareil par capteur de pièce** (SmartSensor) : température et présence.
+
+Les fonctionnalités du thermostat utilisent la catégorie thermostat du cœur : le **thermostat**
+de Gladys 5.2 peut piloter un ecobee comme thermostat _externe_ (choisissez la consigne de
+chauffage comme cible et le mode comme fonctionnalité de mode).
+
+## 5. Widget de tableau de bord
+
+Ajoutez le widget **Thermostat ecobee** et choisissez un thermostat. Il affiche la température,
+la ou les consignes et l’humidité en tuiles en direct, le mode, ce qui fonctionne, le mode confort
+et le maintien, et quatre boutons :
+
+- **Baisser** / **Monter** : un pas de consigne (0,5 °C ou 1 °F) ; en auto, les deux consignes
+  bougent ensemble. Masqués quand le thermostat est arrêté.
+- **Mode** : la liste des modes du thermostat.
+- **Confort** : programme, Maison, Absent, Sommeil.
+
+## 6. Déclencheurs de scène
+
+- **ecobee : présence détectée** (`home_occupied`) : personne n’était détecté autour d’un
+  thermostat (lui et ses capteurs), maintenant quelqu’un l’est. Variables : nom du thermostat,
+  capteurs qui détectent quelqu’un.
+- **ecobee : plus personne** (`home_vacant`) : plus aucun capteur du thermostat ne détecte
+  quelqu’un.
+- **ecobee : nouvelle alerte** (`alert`) : le thermostat a émis une alerte ou un rappel (filtre
+  à changer, entretien, température hors limites…). Variables : nom du thermostat, texte, type.
+
+La présence de chaque capteur est aussi une fonctionnalité : utilisez le déclencheur habituel
+« valeur d’un appareil » pour une seule pièce. Ces déclencheurs ajoutent ce qu’une fonctionnalité
+seule ne dit pas : toute la maison.
+
+## 7. Actions de scène
+
+- **ecobee : reprendre le programme** (`resume_program`) : annule tous les maintiens et les
+  vacances en cours.
+- **ecobee : choisir un mode confort** (`set_comfort`) : maintient Maison, Absent ou Sommeil pour
+  la durée choisie (celle de la configuration, jusqu’au prochain changement du programme, jusqu’à
+  nouvel ordre, 2 ou 4 heures).
+- **ecobee : partir en vacances** (`start_vacation`) : démarre des vacances ecobee maintenant pour
+  un nombre de jours ; sans consignes, celles du mode Absent. Sortie : la date de fin.
+- **ecobee : annuler les vacances** (`cancel_vacation`) : supprime les vacances en cours et
+  prévues.
+
+La consigne, le mode et la ventilation se règlent avec l’action « Contrôler un appareil » du cœur.
+Un capteur de pièce choisi dans une action vaut pour son thermostat.
+
+## 8. Exemples de scènes
+
+- **Tout le monde est parti** : quand l’alarme est armée, lancez _choisir un mode confort_
+  Absent, jusqu’à nouvel ordre ; quand elle est désarmée, lancez _reprendre le programme_.
+- **Rappel du filtre** : sur _nouvelle alerte_, envoyez le message « {{triggerEvent.data.text}} ».
+- **Fenêtre ouverte** : quand un détecteur d’ouverture signale une ouverture depuis 5 minutes,
+  passez le **Mode** à arrêt ; à la fermeture, repassez-le en chauffage.
+- **Long voyage** : depuis le calendrier, lancez _partir en vacances_ pour 10 jours.
+
+## 9. Rafraîchissement et limites de l’API
+
+ecobee demande aux clients de son API de ne pas lire les thermostats plus souvent que **toutes
+les 3 minutes**. L’intégration lit tous vos thermostats en une seule requête à chaque _intervalle
+de lecture_ (3 minutes par défaut), plus une lecture quelques secondes après une commande pour en
+montrer l’effet. Seules les valeurs qui changent sont envoyées à Gladys, et chaque valeur au moins
+toutes les 6 heures. L’intégration se rafraîchit seule et ne dépend pas du sondage de Gladys.
+
+## 10. Dépannage
+
+- **« ecobee a refusé l’e-mail ou le mot de passe »** : vérifiez-les dans l’appli ecobee ;
+  l’intégration ne réessaie jamais seule un mot de passe refusé, enregistrez à nouveau la
+  configuration.
+- **Le statut demande un code de vérification** : lancez _Saisir le code de vérification_. Un
+  code par SMS vaut environ 10 minutes ; au-delà, l’action déclenche un nouveau SMS.
+- **« ecobee demande une étape dans un navigateur »** : connectez-vous une fois sur ecobee.com
+  (nouvelles conditions…), puis enregistrez à nouveau la configuration.
+- **« ecobee ne répond pas »** : coupure d’internet ou d’ecobee ; l’intégration réessaie à chaque
+  intervalle de lecture.
+- **Un thermostat est hors ligne** : il a perdu sa connexion à ecobee ; ses dernières valeurs
+  restent, les commandes sont refusées jusqu’à son retour.
+- Journaux : l’intégration écrit sa connexion et les problèmes une fois ; `LOG_LEVEL=debug`
+  montre chaque lecture.
+
+## 11. Limites
+
+- La connexion par compte utilise la même page de connexion que le portail web ecobee, comme Home
+  Assistant : si ecobee la change, la connexion peut casser jusqu’à une mise à jour.
+- La validation en deux étapes par notification ou lien par e-mail n’est pas prise en charge.
+- Les lectures ont lieu au plus toutes les 3 minutes : la présence et l’état de fonctionnement ne
+  sont pas instantanés.
+- Non pris en charge : humidificateur, déshumidificateur et ventilateur d’air neuf, capteurs d’un
+  mode confort, qualité de l’air, météo, et la modification du programme du thermostat.
+- Les noms des fonctionnalités sont figés à l’ajout d’un appareil dans Gladys.
+- Développée sans le matériel ni compte ecobee : testée seulement sur des réponses publiées de
+  l’API. Vos retours sont les bienvenus.

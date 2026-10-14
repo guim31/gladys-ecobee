@@ -1,93 +1,127 @@
+// -----------------------------------------------------------------------------
+// The scene actions: what they send to ecobee, and their refusals.
+// -----------------------------------------------------------------------------
+
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import { createFakeGladys } from '@gladysassistant/integration-sdk/testing';
-import { DEVICE_BLUEPRINTS } from '../src/devices/index.js';
-import { MOTION_DETECTED_TRIGGER, motionSensor } from '../src/devices/motionSensor.js';
-import { SCENE_ACTIONS } from '../src/scenes.js';
-import { normalizeConfig } from '../src/config.js';
+import { FIXTURES } from './helpers/fakeEcobee.js';
+import { ACCOUNT_CONFIG, createWorld, thermostatId } from './helpers/world.js';
 
-const manifest = JSON.parse(
-  await readFile(new URL('../gladys-assistant-integration.json', import.meta.url), 'utf8'),
-);
-const config = normalizeConfig();
+const run = (world, key, fields) => world.gladys.fake.sceneAction(key, fields);
+const sent = (world) => world.ecobee.updates.at(-1);
 
-const declarationOf = (list, key) => manifest[list].find((entry) => entry.key === key);
-const keysOf = (list) => (list ?? []).map((entry) => entry.key);
-const deviceIdOf = (gladys, key) =>
-  DEVICE_BLUEPRINTS.find((bp) => bp.key === key).deviceExternalId(gladys);
-
-// Let the async interval callback run to completion.
-const flush = () => new Promise((resolve) => setImmediate(resolve));
-
-test('the motion sensor fires one motion_detected event per detection, none on the clear', async (t) => {
-  t.mock.timers.enable({ apis: ['setInterval', 'setTimeout'] });
-  const gladys = createFakeGladys();
-  const stopPush = motionSensor.startPush(gladys, config);
-  try {
-    t.mock.timers.tick(60_000);
-    await flush();
-    assert.equal(gladys.fake.sceneEvents.length, 1, 'one detection, one event');
-    assert.equal(gladys.fake.sceneEvents[0].key, MOTION_DETECTED_TRIGGER);
-    assert.equal(gladys.fake.states.at(-1).state, 1, 'the state is still published');
-
-    t.mock.timers.tick(10_000);
-    await flush();
-    assert.equal(gladys.fake.states.at(-1).state, 0, 'the detection is cleared');
-    assert.equal(gladys.fake.sceneEvents.length, 1, 'the clear fires no event');
-  } finally {
-    stopPush();
-  }
-});
-
-test('motion_detected data only carries keys the trigger declares', async (t) => {
-  t.mock.timers.enable({ apis: ['setInterval', 'setTimeout'] });
-  const gladys = createFakeGladys();
-  const stopPush = motionSensor.startPush(gladys, config);
-  try {
-    t.mock.timers.tick(60_000);
-    await flush();
-  } finally {
-    stopPush();
-  }
-  const [{ data }] = gladys.fake.sceneEvents;
-  const trigger = declarationOf('scene_triggers', MOTION_DETECTED_TRIGGER);
-  // The core keeps the `fields` keys (filters) and the `variables` keys
-  // (exposed to the scene): any other key would be silently dropped.
-  const declared = [...keysOf(trigger.fields), ...keysOf(trigger.variables)];
-  for (const [key, value] of Object.entries(data)) {
-    assert.ok(declared.includes(key), `data.${key} is not declared, the core would drop it`);
-    assert.ok(value === null || typeof value !== 'object', `data.${key} must be a primitive`);
-  }
-  // A `"source": "devices"` filter stores a device external_id.
-  assert.equal(data.device, deviceIdOf(gladys, 'motion-sensor'));
-  const targets = trigger.fields.find((field) => field.key === 'target').options;
-  assert.ok(
-    targets.some((option) => option.value === data.target),
-    `data.target "${data.target}" must be one of the filter options`,
-  );
-});
-
-test('identify_device signals the chosen device and returns the declared outputs', async () => {
-  const gladys = createFakeGladys();
-  const outputs = await SCENE_ACTIONS.identify_device(gladys, {
-    fields: { device: deviceIdOf(gladys, 'light') },
-    config,
+test('resume_program cancels every hold', async (t) => {
+  const world = await createWorld();
+  t.after(() => world.app.stop());
+  const ack = await run(world, 'resume_program', {
+    thermostat: thermostatId(world, '411900000101'),
   });
-  assert.deepEqual(outputs, { signalled: true });
-  const declared = keysOf(declarationOf('scene_actions', 'identify_device').outputs);
-  for (const key of Object.keys(outputs)) {
-    assert.ok(declared.includes(key), `output "${key}" is not declared, the core would drop it`);
-  }
+  assert.equal(ack.success, true, ack.error);
+  assert.deepEqual(sent(world).functions, [{ type: 'resumeProgram', params: { resumeAll: true } }]);
 });
 
-test('identify_device reports a device that cannot signal itself through its output', async () => {
-  // Not a failure: a scene action is never a condition, the scene author
-  // gates the following actions on the output instead.
-  const gladys = createFakeGladys();
-  const outputs = await SCENE_ACTIONS.identify_device(gladys, {
-    fields: { device: deviceIdOf(gladys, 'weather-station') },
-    config,
+test('set_comfort: the chosen duration, or the one of the configuration', async (t) => {
+  const world = await createWorld({ config: { ...ACCOUNT_CONFIG, hold_duration: 'indefinite' } });
+  t.after(() => world.app.stop());
+  const thermostat = thermostatId(world, '411900000101');
+  await run(world, 'set_comfort', { thermostat, comfort: 'away', duration: 'default' });
+  assert.deepEqual(sent(world).functions[0].params, {
+    holdType: 'indefinite',
+    holdClimateRef: 'away',
   });
-  assert.deepEqual(outputs, { signalled: false });
+  await run(world, 'set_comfort', { thermostat, comfort: 'sleep', duration: 'hours_2' });
+  assert.deepEqual(sent(world).functions[0].params, {
+    holdType: 'holdHours',
+    holdHours: 2,
+    holdClimateRef: 'sleep',
+  });
+  // A remote sensor stands for its thermostat.
+  const sensor = world.gladys.externalIds('sensor', '411900000101-QX4T').device;
+  await run(world, 'set_comfort', {
+    thermostat: sensor,
+    comfort: 'home',
+    duration: 'next_transition',
+  });
+  assert.equal(sent(world).selection.selectionMatch, '411900000101');
+});
+
+test('set_comfort refuses a comfort setting the thermostat does not have', async (t) => {
+  const world = await createWorld({ ecobee: { fixture: FIXTURES['lite-and-cool-only'] } });
+  t.after(() => world.app.stop());
+  world.ecobee.mutate((list) => {
+    list[1].runtime.connected = true;
+  });
+  await world.hub.refresh({ force: true });
+  const ack = await run(world, 'set_comfort', {
+    thermostat: thermostatId(world, '311500000404'),
+    comfort: 'sleep',
+    duration: 'default',
+  });
+  assert.equal(ack.success, false);
+  assert.match(ack.error, /comfort setting does not exist/);
+});
+
+test('start_vacation: from the thermostat clock, the Away setpoints by default', async (t) => {
+  const world = await createWorld();
+  t.after(() => world.app.stop());
+  const ack = await run(world, 'start_vacation', {
+    thermostat: thermostatId(world, '411900000101'),
+    days: 3,
+  });
+  assert.equal(ack.success, true, ack.error);
+  assert.deepEqual(ack.data.outputs, { end_date: '2026-10-17' });
+  assert.deepEqual(sent(world).functions, [
+    {
+      type: 'createVacation',
+      params: {
+        name: 'Gladys 2026-10-14',
+        heatHoldTemp: 620,
+        coolHoldTemp: 820,
+        startDate: '2026-10-14',
+        startTime: '07:43:00',
+        endDate: '2026-10-17',
+        endTime: '07:43:00',
+        fan: 'auto',
+        fanMinOnTime: '0',
+      },
+    },
+  ]);
+});
+
+test('start_vacation with setpoints in °C, the cool one kept above the heat one', async (t) => {
+  const world = await createWorld({ ecobee: { fixture: FIXTURES['premium-celsius'] } });
+  t.after(() => world.app.stop());
+  await run(world, 'start_vacation', {
+    thermostat: thermostatId(world, '521700000202'),
+    days: 10,
+    heat_setpoint: 15,
+    cool_setpoint: 14,
+  });
+  const { params } = sent(world).functions[0];
+  assert.equal(params.heatHoldTemp, 590);
+  assert.equal(params.coolHoldTemp, 630, 'heat + heatCoolMinDelta (4 °F)');
+});
+
+test('cancel_vacation deletes the vacations, and says when there is none', async (t) => {
+  const world = await createWorld({ ecobee: { fixture: FIXTURES['premium-celsius'] } });
+  t.after(() => world.app.stop());
+  const thermostat = thermostatId(world, '521700000202');
+  await run(world, 'cancel_vacation', { thermostat });
+  assert.deepEqual(sent(world).functions, [
+    { type: 'deleteVacation', params: { name: 'Ski trip' } },
+  ]);
+  await world.hub.refresh({ force: true });
+  const none = await run(world, 'cancel_vacation', { thermostat });
+  assert.equal(none.success, false);
+  assert.match(none.error, /No vacation/);
+});
+
+test('the errors are in the language of the configuration', async (t) => {
+  const world = await createWorld({ config: { ...ACCOUNT_CONFIG, language: 'es' } });
+  t.after(() => world.app.stop());
+  const ack = await run(world, 'resume_program', {
+    thermostat: 'ext:test-integration:thermostat:0',
+  });
+  assert.equal(ack.success, false);
+  assert.match(ack.error, /^Este termostato ecobee es desconocido/);
 });

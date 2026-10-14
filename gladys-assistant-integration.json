@@ -1,177 +1,910 @@
 {
   "manifest_version": 1,
   "type": "device",
-  "name": "Demo Devices Template",
+  "name": "ecobee",
   "description": {
-    "en": "Starter template showing sensors, a switch, a dimmable light and a smart plug.",
-    "fr": "Template de démarrage : capteurs, interrupteur, lampe variable et prise connectée."
+    "en": "ecobee thermostats and SmartSensors: temperature, setpoints, modes, comfort settings, presence.",
+    "fr": "Thermostats et capteurs ecobee : température, consignes, modes, confort, présence.",
+    "de": "ecobee-Thermostate und SmartSensoren: Temperatur, Sollwerte, Modi, Komfort, Anwesenheit.",
+    "es": "Termostatos y sensores ecobee: temperatura, consignas, modos, confort y presencia."
   },
   "version": "1.0.0",
-  "docker_image": "ghcr.io/gladysassistant/integration-template-js:1.0.0",
-  "gladys_version": ">=5.1.0",
-  "cover_image": "https://raw.githubusercontent.com/GladysAssistant/integration-template-js/master/cover.png",
-  "categories": ["lighting", "security", "environment"],
-  "transports": ["local", "cloud"],
+  "docker_image": "ghcr.io/guim31/gladys-ecobee:1.0.0",
+  "gladys_version": ">=5.2.0",
+  "cover_image": "https://raw.githubusercontent.com/guim31/gladys-ecobee/main/cover.png",
+  "categories": ["climate"],
+  "transports": ["cloud"],
   "config_schema": [
     {
-      "key": "intro",
+      "key": "account_intro",
       "type": "section",
-      "label": { "en": "Getting started", "fr": "Pour commencer" },
+      "label": {
+        "en": "Your ecobee account",
+        "fr": "Votre compte ecobee",
+        "de": "Dein ecobee-Konto",
+        "es": "Su cuenta ecobee"
+      },
       "description": {
-        "en": "The demo weather station reads real data from the free Open-Meteo API: pick the coordinates to observe. No account, no API key.",
-        "fr": "La station météo de démonstration lit de vraies données via l'API gratuite Open-Meteo : choisissez les coordonnées à observer. Pas de compte, pas de clé d'API."
+        "en": "Enter the email and password you use in the ecobee app, then save. If your account uses two-step verification, enter the code with the “Enter the verification code” action. Not affiliated with ecobee.",
+        "fr": "Saisissez l’e-mail et le mot de passe de l’appli ecobee, puis enregistrez. Si votre compte utilise la validation en deux étapes, saisissez le code avec l’action « Saisir le code de vérification ». Sans lien avec ecobee.",
+        "de": "Gib die E-Mail-Adresse und das Passwort der ecobee-App ein und speichere. Nutzt dein Konto die Bestätigung in zwei Schritten, gib den Code mit der Aktion „Bestätigungscode eingeben“ ein. Nicht mit ecobee verbunden.",
+        "es": "Introduzca el correo y la contraseña de la aplicación ecobee y guarde. Si su cuenta usa la verificación en dos pasos, introduzca el código con la acción «Introducir el código de verificación». Sin relación con ecobee."
       },
       "links": [
         {
-          "url": "https://open-meteo.com/en/docs",
-          "label": { "en": "Open-Meteo documentation", "fr": "Documentation Open-Meteo" }
+          "url": "https://www.ecobee.com/consumerportal/index.html",
+          "label": {
+            "en": "ecobee web portal",
+            "fr": "Portail web ecobee",
+            "de": "ecobee-Webportal",
+            "es": "Portal web de ecobee"
+          }
         }
       ]
     },
     {
-      "key": "latitude",
-      "type": "number",
-      "label": { "en": "Latitude", "fr": "Latitude" },
-      "description": {
-        "en": "Latitude used for the demo weather sensor.",
-        "fr": "Latitude utilisée par le capteur météo de démonstration."
+      "key": "email",
+      "type": "string",
+      "label": {
+        "en": "Email",
+        "fr": "E-mail",
+        "de": "E-Mail-Adresse",
+        "es": "Correo electrónico"
       },
-      "placeholder": { "en": "e.g. 48.8566", "fr": "ex. 48.8566" },
-      "required": true,
-      "default": 48.8566,
-      "min": -90,
-      "max": 90
+      "description": {
+        "en": "The email of your ecobee account.",
+        "fr": "L’e-mail de votre compte ecobee.",
+        "de": "Die E-Mail-Adresse deines ecobee-Kontos.",
+        "es": "El correo electrónico de su cuenta ecobee."
+      },
+      "placeholder": {
+        "en": "you@example.com",
+        "fr": "vous@exemple.fr",
+        "de": "du@beispiel.de",
+        "es": "usted@ejemplo.es"
+      },
+      "required": false
     },
     {
-      "key": "longitude",
-      "type": "number",
-      "label": { "en": "Longitude", "fr": "Longitude" },
-      "description": {
-        "en": "Longitude used for the demo weather sensor.",
-        "fr": "Longitude utilisée par le capteur météo de démonstration."
+      "key": "password",
+      "type": "secret",
+      "label": {
+        "en": "Password",
+        "fr": "Mot de passe",
+        "de": "Passwort",
+        "es": "Contraseña"
       },
-      "placeholder": { "en": "e.g. 2.3522", "fr": "ex. 2.3522" },
-      "required": true,
-      "default": 2.3522,
-      "min": -180,
-      "max": 180
+      "description": {
+        "en": "Kept by Gladys, used again only when ecobee ends the session.",
+        "fr": "Conservé par Gladys, réutilisé seulement quand ecobee met fin à la session.",
+        "de": "Von Gladys gespeichert, nur erneut genutzt, wenn ecobee die Sitzung beendet.",
+        "es": "Guardada por Gladys, solo se reutiliza cuando ecobee cierra la sesión."
+      },
+      "required": false
     },
     {
-      "key": "unit",
+      "key": "settings_intro",
+      "type": "section",
+      "label": {
+        "en": "Settings",
+        "fr": "Réglages",
+        "de": "Einstellungen",
+        "es": "Ajustes"
+      },
+      "description": {
+        "en": "How temperatures are shown, how long a change made from Gladys lasts, and how often ecobee is read.",
+        "fr": "Unité des températures, durée d’un changement fait depuis Gladys, fréquence de lecture d’ecobee.",
+        "de": "Einheit der Temperaturen, Dauer einer Änderung aus Gladys und wie oft ecobee abgefragt wird.",
+        "es": "Unidad de las temperaturas, duración de un cambio hecho desde Gladys y frecuencia de lectura de ecobee."
+      }
+    },
+    {
+      "key": "temperature_unit",
       "type": "select",
-      "label": { "en": "Temperature unit", "fr": "Unité de température" },
+      "label": {
+        "en": "Temperature unit",
+        "fr": "Unité de température",
+        "de": "Temperatureinheit",
+        "es": "Unidad de temperatura"
+      },
+      "description": {
+        "en": "The unit of the features. Gladys also converts the readings to each user’s unit.",
+        "fr": "L’unité des fonctionnalités. Gladys convertit aussi les mesures dans l’unité de chaque utilisateur.",
+        "de": "Die Einheit der Funktionen. Gladys rechnet die Messwerte auch in die Einheit jedes Benutzers um.",
+        "es": "La unidad de las funciones. Gladys también convierte las lecturas a la unidad de cada usuario."
+      },
       "required": false,
-      "default": "celsius",
+      "default": "thermostat",
       "options": [
-        { "value": "celsius", "label": { "en": "Celsius", "fr": "Celsius" } },
-        { "value": "fahrenheit", "label": { "en": "Fahrenheit", "fr": "Fahrenheit" } }
+        {
+          "value": "thermostat",
+          "label": {
+            "en": "Same as the thermostat",
+            "fr": "Celle du thermostat",
+            "de": "Wie das Thermostat",
+            "es": "La del termostato"
+          }
+        },
+        {
+          "value": "celsius",
+          "label": {
+            "en": "Celsius",
+            "fr": "Celsius",
+            "de": "Celsius",
+            "es": "Celsius"
+          }
+        },
+        {
+          "value": "fahrenheit",
+          "label": {
+            "en": "Fahrenheit",
+            "fr": "Fahrenheit",
+            "de": "Fahrenheit",
+            "es": "Fahrenheit"
+          }
+        }
       ]
     },
     {
-      "key": "poll_frequency",
-      "type": "number",
-      "label": { "en": "Refresh interval (s)", "fr": "Intervalle de rafraîchissement (s)" },
+      "key": "hold_duration",
+      "type": "select",
+      "label": {
+        "en": "Hold changes made from Gladys",
+        "fr": "Maintenir les changements faits depuis Gladys",
+        "de": "Änderungen aus Gladys halten",
+        "es": "Mantener los cambios hechos desde Gladys"
+      },
       "description": {
-        "en": "How often sensors are polled, in seconds (one minute minimum).",
-        "fr": "Fréquence d'interrogation des capteurs, en secondes (une minute minimum)."
+        "en": "A setpoint or comfort setting changed from Gladys is a hold, like in the ecobee app.",
+        "fr": "Une consigne ou un mode confort changé depuis Gladys est un maintien, comme dans l’appli ecobee.",
+        "de": "Ein aus Gladys geänderter Sollwert oder Komfort ist ein Halten, wie in der ecobee-App.",
+        "es": "Una consigna o un ajuste de confort cambiado desde Gladys es un mantenimiento, como en la aplicación ecobee."
       },
       "required": false,
-      "default": 300,
-      "min": 60,
-      "max": 3600
+      "default": "next_transition",
+      "options": [
+        {
+          "value": "next_transition",
+          "label": {
+            "en": "Until the next program change",
+            "fr": "Jusqu’au prochain changement du programme",
+            "de": "Bis zur nächsten Programmänderung",
+            "es": "Hasta el próximo cambio del programa"
+          }
+        },
+        {
+          "value": "indefinite",
+          "label": {
+            "en": "Until I change it",
+            "fr": "Jusqu’à ce que je le change",
+            "de": "Bis ich es ändere",
+            "es": "Hasta que yo lo cambie"
+          }
+        },
+        {
+          "value": "hours_2",
+          "label": {
+            "en": "2 hours",
+            "fr": "2 heures",
+            "de": "2 Stunden",
+            "es": "2 horas"
+          }
+        },
+        {
+          "value": "hours_4",
+          "label": {
+            "en": "4 hours",
+            "fr": "4 heures",
+            "de": "4 Stunden",
+            "es": "4 horas"
+          }
+        },
+        {
+          "value": "thermostat",
+          "label": {
+            "en": "As set on the thermostat",
+            "fr": "Comme réglé sur le thermostat",
+            "de": "Wie am Thermostat eingestellt",
+            "es": "Como en el termostato"
+          }
+        }
+      ]
+    },
+    {
+      "key": "refresh_minutes",
+      "type": "number",
+      "label": {
+        "en": "Refresh interval (minutes)",
+        "fr": "Intervalle de lecture (minutes)",
+        "de": "Abfrageintervall (Minuten)",
+        "es": "Intervalo de lectura (minutos)"
+      },
+      "description": {
+        "en": "ecobee asks not to read more often than every 3 minutes.",
+        "fr": "ecobee demande de ne pas lire plus souvent que toutes les 3 minutes.",
+        "de": "ecobee bittet, nicht öfter als alle 3 Minuten abzufragen.",
+        "es": "ecobee pide no leer con más frecuencia que cada 3 minutos."
+      },
+      "required": false,
+      "default": 3,
+      "min": 3,
+      "max": 60
+    },
+    {
+      "key": "language",
+      "type": "select",
+      "label": {
+        "en": "Language of the feature names",
+        "fr": "Langue des noms de fonctionnalités",
+        "de": "Sprache der Funktionsnamen",
+        "es": "Idioma de los nombres de funciones"
+      },
+      "description": {
+        "en": "Feature names are fixed when a device is added to Gladys.",
+        "fr": "Les noms sont figés quand l’appareil est ajouté à Gladys.",
+        "de": "Die Namen werden beim Hinzufügen des Geräts zu Gladys festgelegt.",
+        "es": "Los nombres se fijan al añadir el dispositivo a Gladys."
+      },
+      "required": false,
+      "default": "fr",
+      "options": [
+        {
+          "value": "en",
+          "label": {
+            "en": "English",
+            "fr": "Anglais",
+            "de": "Englisch",
+            "es": "Inglés"
+          }
+        },
+        {
+          "value": "fr",
+          "label": {
+            "en": "French",
+            "fr": "Français",
+            "de": "Französisch",
+            "es": "Francés"
+          }
+        },
+        {
+          "value": "de",
+          "label": {
+            "en": "German",
+            "fr": "Allemand",
+            "de": "Deutsch",
+            "es": "Alemán"
+          }
+        },
+        {
+          "value": "es",
+          "label": {
+            "en": "Spanish",
+            "fr": "Espagnol",
+            "de": "Spanisch",
+            "es": "Español"
+          }
+        }
+      ]
+    },
+    {
+      "key": "api_key_intro",
+      "type": "section",
+      "label": {
+        "en": "Developer API key (optional)",
+        "fr": "Clé d’API développeur (facultatif)",
+        "de": "Entwickler-API-Schlüssel (optional)",
+        "es": "Clave de API de desarrollador (opcional)"
+      },
+      "description": {
+        "en": "ecobee no longer issues API keys. If you still have one, enter it here instead of the email and password, save, then use the “Get a PIN” action.",
+        "fr": "ecobee ne délivre plus de clés d’API. Si vous en avez encore une, saisissez-la ici à la place de l’e-mail et du mot de passe, enregistrez, puis utilisez l’action « Obtenir un code PIN ».",
+        "de": "ecobee vergibt keine API-Schlüssel mehr. Hast du noch einen, gib ihn hier statt E-Mail und Passwort ein, speichere und nutze dann die Aktion „PIN anfordern“.",
+        "es": "ecobee ya no emite claves de API. Si aún tiene una, introdúzcala aquí en lugar del correo y la contraseña, guarde y use la acción «Obtener un PIN»."
+      }
+    },
+    {
+      "key": "api_key",
+      "type": "secret",
+      "label": {
+        "en": "API key",
+        "fr": "Clé d’API",
+        "de": "API-Schlüssel",
+        "es": "Clave de API"
+      },
+      "required": false
     }
   ],
   "actions": [
     {
-      "key": "test_weather",
-      "label": { "en": "Test the weather provider", "fr": "Tester le fournisseur météo" },
-      "timeout_seconds": 30
+      "key": "sign_in",
+      "label": {
+        "en": "Sign in and test",
+        "fr": "Se connecter et tester",
+        "de": "Anmelden und testen",
+        "es": "Iniciar sesión y probar"
+      },
+      "description": {
+        "en": "Signs in to ecobee if needed, reads the thermostats and reports how many were found.",
+        "fr": "Se connecte à ecobee si besoin, lit les thermostats et indique combien ont été trouvés.",
+        "de": "Meldet sich bei Bedarf bei ecobee an, liest die Thermostate und meldet, wie viele gefunden wurden.",
+        "es": "Inicia sesión en ecobee si hace falta, lee los termostatos e indica cuántos se han encontrado."
+      },
+      "timeout_seconds": 60
     },
     {
-      "key": "identify",
-      "label": { "en": "Identify a device", "fr": "Identifier un appareil" },
+      "key": "mfa_code",
+      "label": {
+        "en": "Enter the verification code",
+        "fr": "Saisir le code de vérification",
+        "de": "Bestätigungscode eingeben",
+        "es": "Introducir el código de verificación"
+      },
+      "description": {
+        "en": "For an account with two-step verification: the code of the authenticator app, or the one received by SMS.",
+        "fr": "Pour un compte avec validation en deux étapes : le code de l’application d’authentification, ou celui reçu par SMS.",
+        "de": "Für ein Konto mit Bestätigung in zwei Schritten: der Code der Authentifizierungs-App oder der per SMS erhaltene.",
+        "es": "Para una cuenta con verificación en dos pasos: el código de la aplicación de autenticación o el recibido por SMS."
+      },
+      "timeout_seconds": 60,
       "fields": [
         {
-          "key": "device",
-          "type": "select",
-          "source": "devices",
-          "label": { "en": "Device", "fr": "Appareil" },
+          "key": "code",
+          "type": "string",
+          "label": {
+            "en": "Code",
+            "fr": "Code",
+            "de": "Code",
+            "es": "Código"
+          },
+          "placeholder": {
+            "en": "123456",
+            "fr": "123456",
+            "de": "123456",
+            "es": "123456"
+          },
           "required": true
         }
       ]
+    },
+    {
+      "key": "request_pin",
+      "label": {
+        "en": "Get a PIN",
+        "fr": "Obtenir un code PIN",
+        "de": "PIN anfordern",
+        "es": "Obtener un PIN"
+      },
+      "description": {
+        "en": "Developer API key only: shows a PIN to enter on ecobee.com, under My Apps.",
+        "fr": "Clé d’API développeur seulement : affiche un code PIN à saisir sur ecobee.com, dans « My Apps ».",
+        "de": "Nur Entwickler-API-Schlüssel: Zeigt eine PIN, die du auf ecobee.com unter „My Apps“ eingibst.",
+        "es": "Solo clave de API de desarrollador: muestra un PIN para introducir en ecobee.com, en «My Apps»."
+      },
+      "timeout_seconds": 30
+    },
+    {
+      "key": "sign_out",
+      "label": {
+        "en": "Sign out",
+        "fr": "Se déconnecter",
+        "de": "Abmelden",
+        "es": "Cerrar sesión"
+      },
+      "description": {
+        "en": "Deletes the ecobee session stored by the integration.",
+        "fr": "Supprime la session ecobee conservée par l’intégration.",
+        "de": "Löscht die von der Integration gespeicherte ecobee-Sitzung.",
+        "es": "Elimina la sesión de ecobee guardada por la integración."
+      }
     }
   ],
   "scene_triggers": [
     {
-      "key": "motion_detected",
-      "label": { "en": "Motion detected", "fr": "Mouvement détecté" },
+      "key": "home_occupied",
+      "label": {
+        "en": "ecobee: somebody detected",
+        "fr": "ecobee : présence détectée",
+        "de": "ecobee: Anwesenheit erkannt",
+        "es": "ecobee: presencia detectada"
+      },
       "description": {
-        "en": "A demo motion sensor saw a person or an animal move.",
-        "fr": "Un détecteur de démonstration a vu bouger une personne ou un animal."
+        "en": "Nobody was detected around a thermostat (it and its sensors), now somebody is.",
+        "fr": "Personne n’était détecté autour d’un thermostat (lui et ses capteurs), maintenant quelqu’un l’est.",
+        "de": "Bei einem Thermostat (es und seine Sensoren) war niemand erkannt, jetzt jemand.",
+        "es": "No se detectaba a nadie en torno a un termostato (él y sus sensores), ahora sí."
       },
       "fields": [
         {
           "key": "device",
           "type": "select",
           "source": "devices",
-          "label": { "en": "Sensor", "fr": "Détecteur" }
-        },
-        {
-          "key": "target",
-          "type": "multi_select",
-          "label": { "en": "What moved", "fr": "Ce qui a bougé" },
-          "options": [
-            { "value": "person", "label": { "en": "Person", "fr": "Personne" } },
-            { "value": "animal", "label": { "en": "Animal", "fr": "Animal" } }
-          ]
+          "label": {
+            "en": "Thermostat",
+            "fr": "Thermostat",
+            "de": "Thermostat",
+            "es": "Termostato"
+          },
+          "description": {
+            "en": "Leave empty for every thermostat.",
+            "fr": "Laissez vide pour tous les thermostats.",
+            "de": "Leer lassen für alle Thermostate.",
+            "es": "Déjelo vacío para todos los termostatos."
+          }
         }
       ],
       "variables": [
         {
-          "key": "target",
+          "key": "thermostat",
           "type": "string",
-          "label": { "en": "What moved", "fr": "Ce qui a bougé" }
+          "label": {
+            "en": "Thermostat name",
+            "fr": "Nom du thermostat",
+            "de": "Name des Thermostats",
+            "es": "Nombre del termostato"
+          }
+        },
+        {
+          "key": "sensors",
+          "type": "string",
+          "label": {
+            "en": "Sensors that detect somebody",
+            "fr": "Capteurs qui détectent quelqu’un",
+            "de": "Sensoren mit Anwesenheit",
+            "es": "Sensores que detectan a alguien"
+          }
+        }
+      ]
+    },
+    {
+      "key": "home_vacant",
+      "label": {
+        "en": "ecobee: nobody detected",
+        "fr": "ecobee : plus personne",
+        "de": "ecobee: niemand mehr erkannt",
+        "es": "ecobee: ya no hay nadie"
+      },
+      "description": {
+        "en": "No sensor of a thermostat (it included) detects anybody any more.",
+        "fr": "Plus aucun capteur d’un thermostat (lui compris) ne détecte quelqu’un.",
+        "de": "Kein Sensor eines Thermostats (es selbst eingeschlossen) erkennt noch jemanden.",
+        "es": "Ningún sensor de un termostato (incluido él) detecta ya a nadie."
+      },
+      "fields": [
+        {
+          "key": "device",
+          "type": "select",
+          "source": "devices",
+          "label": {
+            "en": "Thermostat",
+            "fr": "Thermostat",
+            "de": "Thermostat",
+            "es": "Termostato"
+          },
+          "description": {
+            "en": "Leave empty for every thermostat.",
+            "fr": "Laissez vide pour tous les thermostats.",
+            "de": "Leer lassen für alle Thermostate.",
+            "es": "Déjelo vacío para todos los termostatos."
+          }
+        }
+      ],
+      "variables": [
+        {
+          "key": "thermostat",
+          "type": "string",
+          "label": {
+            "en": "Thermostat name",
+            "fr": "Nom du thermostat",
+            "de": "Name des Thermostats",
+            "es": "Nombre del termostato"
+          }
+        }
+      ]
+    },
+    {
+      "key": "alert",
+      "label": {
+        "en": "ecobee: new alert",
+        "fr": "ecobee : nouvelle alerte",
+        "de": "ecobee: neue Warnung",
+        "es": "ecobee: nueva alerta"
+      },
+      "description": {
+        "en": "The thermostat raised an alert or a reminder: filter change, maintenance, temperature out of range…",
+        "fr": "Le thermostat a émis une alerte ou un rappel : filtre à changer, entretien, température hors limites…",
+        "de": "Das Thermostat meldet eine Warnung oder Erinnerung: Filterwechsel, Wartung, Temperatur außerhalb des Bereichs…",
+        "es": "El termostato emitió una alerta o un recordatorio: filtro, mantenimiento, temperatura fuera de rango…"
+      },
+      "fields": [
+        {
+          "key": "device",
+          "type": "select",
+          "source": "devices",
+          "label": {
+            "en": "Thermostat",
+            "fr": "Thermostat",
+            "de": "Thermostat",
+            "es": "Termostato"
+          },
+          "description": {
+            "en": "Leave empty for every thermostat.",
+            "fr": "Laissez vide pour tous les thermostats.",
+            "de": "Leer lassen für alle Thermostate.",
+            "es": "Déjelo vacío para todos los termostatos."
+          }
+        }
+      ],
+      "variables": [
+        {
+          "key": "thermostat",
+          "type": "string",
+          "label": {
+            "en": "Thermostat name",
+            "fr": "Nom du thermostat",
+            "de": "Name des Thermostats",
+            "es": "Nombre del termostato"
+          }
+        },
+        {
+          "key": "text",
+          "type": "string",
+          "label": {
+            "en": "Alert text",
+            "fr": "Texte de l’alerte",
+            "de": "Text der Warnung",
+            "es": "Texto de la alerta"
+          }
+        },
+        {
+          "key": "alert_type",
+          "type": "string",
+          "label": {
+            "en": "Alert type",
+            "fr": "Type d’alerte",
+            "de": "Art der Warnung",
+            "es": "Tipo de alerta"
+          }
         }
       ]
     }
   ],
   "scene_actions": [
     {
-      "key": "identify_device",
-      "label": { "en": "Identify a device", "fr": "Identifier un appareil" },
-      "description": {
-        "en": "Make a device signal itself (the demo light blinks).",
-        "fr": "Fait se signaler un appareil (la lampe de démonstration clignote)."
+      "key": "resume_program",
+      "label": {
+        "en": "ecobee: resume the program",
+        "fr": "ecobee : reprendre le programme",
+        "de": "ecobee: Programm fortsetzen",
+        "es": "ecobee: reanudar el programa"
       },
-      "timeout_seconds": 15,
+      "description": {
+        "en": "Cancels every hold and the running vacation: the thermostat follows its program again.",
+        "fr": "Annule tous les maintiens et les vacances en cours : le thermostat suit à nouveau son programme.",
+        "de": "Hebt alle Halte-Einstellungen und den laufenden Urlaub auf: Das Thermostat folgt wieder seinem Programm.",
+        "es": "Cancela todos los mantenimientos y las vacaciones en curso: el termostato vuelve a seguir su programa."
+      },
+      "timeout_seconds": 30,
       "fields": [
         {
-          "key": "device",
+          "key": "thermostat",
           "type": "select",
           "source": "devices",
-          "label": { "en": "Device", "fr": "Appareil" },
+          "label": {
+            "en": "Thermostat",
+            "fr": "Thermostat",
+            "de": "Thermostat",
+            "es": "Termostato"
+          },
+          "description": {
+            "en": "An ecobee thermostat (a remote sensor stands for its thermostat).",
+            "fr": "Un thermostat ecobee (un capteur de pièce vaut pour son thermostat).",
+            "de": "Ein ecobee-Thermostat (ein Raumsensor steht für sein Thermostat).",
+            "es": "Un termostato ecobee (un sensor remoto vale por su termostato)."
+          },
           "required": true
+        }
+      ]
+    },
+    {
+      "key": "set_comfort",
+      "label": {
+        "en": "ecobee: set a comfort setting",
+        "fr": "ecobee : choisir un mode confort",
+        "de": "ecobee: Komforteinstellung wählen",
+        "es": "ecobee: elegir un ajuste de confort"
+      },
+      "description": {
+        "en": "Holds Home, Away or Sleep for the chosen duration.",
+        "fr": "Maintient Maison, Absent ou Sommeil pour la durée choisie.",
+        "de": "Hält Zuhause, Abwesend oder Schlafen für die gewählte Dauer.",
+        "es": "Mantiene Casa, Ausente o Sueño durante el tiempo elegido."
+      },
+      "timeout_seconds": 30,
+      "fields": [
+        {
+          "key": "thermostat",
+          "type": "select",
+          "source": "devices",
+          "label": {
+            "en": "Thermostat",
+            "fr": "Thermostat",
+            "de": "Thermostat",
+            "es": "Termostato"
+          },
+          "description": {
+            "en": "An ecobee thermostat (a remote sensor stands for its thermostat).",
+            "fr": "Un thermostat ecobee (un capteur de pièce vaut pour son thermostat).",
+            "de": "Ein ecobee-Thermostat (ein Raumsensor steht für sein Thermostat).",
+            "es": "Un termostato ecobee (un sensor remoto vale por su termostato)."
+          },
+          "required": true
+        },
+        {
+          "key": "comfort",
+          "type": "select",
+          "label": {
+            "en": "Comfort setting",
+            "fr": "Mode confort",
+            "de": "Komforteinstellung",
+            "es": "Ajuste de confort"
+          },
+          "required": true,
+          "default": "away",
+          "options": [
+            {
+              "value": "home",
+              "label": {
+                "en": "Home",
+                "fr": "Maison",
+                "de": "Zuhause",
+                "es": "Casa"
+              }
+            },
+            {
+              "value": "away",
+              "label": {
+                "en": "Away",
+                "fr": "Absent",
+                "de": "Abwesend",
+                "es": "Ausente"
+              }
+            },
+            {
+              "value": "sleep",
+              "label": {
+                "en": "Sleep",
+                "fr": "Sommeil",
+                "de": "Schlafen",
+                "es": "Sueño"
+              }
+            }
+          ]
+        },
+        {
+          "key": "duration",
+          "type": "select",
+          "label": {
+            "en": "Duration",
+            "fr": "Durée",
+            "de": "Dauer",
+            "es": "Duración"
+          },
+          "required": false,
+          "default": "default",
+          "options": [
+            {
+              "value": "default",
+              "label": {
+                "en": "As in the configuration",
+                "fr": "Comme dans la configuration",
+                "de": "Wie in der Konfiguration",
+                "es": "Como en la configuración"
+              }
+            },
+            {
+              "value": "next_transition",
+              "label": {
+                "en": "Until the next program change",
+                "fr": "Jusqu’au prochain changement du programme",
+                "de": "Bis zur nächsten Programmänderung",
+                "es": "Hasta el próximo cambio del programa"
+              }
+            },
+            {
+              "value": "indefinite",
+              "label": {
+                "en": "Until changed",
+                "fr": "Jusqu’à nouvel ordre",
+                "de": "Bis zur nächsten Änderung",
+                "es": "Hasta nuevo aviso"
+              }
+            },
+            {
+              "value": "hours_2",
+              "label": {
+                "en": "2 hours",
+                "fr": "2 heures",
+                "de": "2 Stunden",
+                "es": "2 horas"
+              }
+            },
+            {
+              "value": "hours_4",
+              "label": {
+                "en": "4 hours",
+                "fr": "4 heures",
+                "de": "4 Stunden",
+                "es": "4 horas"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "start_vacation",
+      "label": {
+        "en": "ecobee: start a vacation",
+        "fr": "ecobee : partir en vacances",
+        "de": "ecobee: Urlaub starten",
+        "es": "ecobee: empezar unas vacaciones"
+      },
+      "description": {
+        "en": "Starts an ecobee vacation now, for the given number of days. Without setpoints, those of the Away comfort setting.",
+        "fr": "Démarre des vacances ecobee maintenant, pour le nombre de jours donné. Sans consignes, celles du mode Absent.",
+        "de": "Startet jetzt einen ecobee-Urlaub für die angegebenen Tage. Ohne Sollwerte gelten die von Abwesend.",
+        "es": "Empieza ahora unas vacaciones ecobee durante los días indicados. Sin consignas, se usan las de Ausente."
+      },
+      "timeout_seconds": 30,
+      "fields": [
+        {
+          "key": "thermostat",
+          "type": "select",
+          "source": "devices",
+          "label": {
+            "en": "Thermostat",
+            "fr": "Thermostat",
+            "de": "Thermostat",
+            "es": "Termostato"
+          },
+          "description": {
+            "en": "An ecobee thermostat (a remote sensor stands for its thermostat).",
+            "fr": "Un thermostat ecobee (un capteur de pièce vaut pour son thermostat).",
+            "de": "Ein ecobee-Thermostat (ein Raumsensor steht für sein Thermostat).",
+            "es": "Un termostato ecobee (un sensor remoto vale por su termostato)."
+          },
+          "required": true
+        },
+        {
+          "key": "days",
+          "type": "number",
+          "label": {
+            "en": "Days",
+            "fr": "Jours",
+            "de": "Tage",
+            "es": "Días"
+          },
+          "required": true,
+          "default": 7,
+          "min": 1,
+          "max": 365
+        },
+        {
+          "key": "heat_setpoint",
+          "type": "number",
+          "label": {
+            "en": "Heat setpoint (optional)",
+            "fr": "Consigne de chauffage (facultatif)",
+            "de": "Sollwert Heizen (optional)",
+            "es": "Consigna de calefacción (opcional)"
+          },
+          "description": {
+            "en": "In the unit of the thermostat features.",
+            "fr": "Dans l’unité des fonctionnalités du thermostat.",
+            "de": "In der Einheit der Thermostat-Funktionen.",
+            "es": "En la unidad de las funciones del termostato."
+          },
+          "required": false
+        },
+        {
+          "key": "cool_setpoint",
+          "type": "number",
+          "label": {
+            "en": "Cool setpoint (optional)",
+            "fr": "Consigne de climatisation (facultatif)",
+            "de": "Sollwert Kühlen (optional)",
+            "es": "Consigna de refrigeración (opcional)"
+          },
+          "description": {
+            "en": "In the unit of the thermostat features.",
+            "fr": "Dans l’unité des fonctionnalités du thermostat.",
+            "de": "In der Einheit der Thermostat-Funktionen.",
+            "es": "En la unidad de las funciones del termostato."
+          },
+          "required": false
         }
       ],
       "outputs": [
         {
-          "key": "signalled",
-          "type": "boolean",
-          "label": { "en": "Device signalled", "fr": "Appareil signalé" }
+          "key": "end_date",
+          "type": "string",
+          "label": {
+            "en": "End date",
+            "fr": "Date de fin",
+            "de": "Enddatum",
+            "es": "Fecha de fin"
+          }
+        }
+      ]
+    },
+    {
+      "key": "cancel_vacation",
+      "label": {
+        "en": "ecobee: cancel the vacation",
+        "fr": "ecobee : annuler les vacances",
+        "de": "ecobee: Urlaub abbrechen",
+        "es": "ecobee: cancelar las vacaciones"
+      },
+      "description": {
+        "en": "Deletes the running and planned vacations of the thermostat.",
+        "fr": "Supprime les vacances en cours et prévues du thermostat.",
+        "de": "Löscht den laufenden und geplanten Urlaub des Thermostats.",
+        "es": "Elimina las vacaciones en curso y previstas del termostato."
+      },
+      "timeout_seconds": 30,
+      "fields": [
+        {
+          "key": "thermostat",
+          "type": "select",
+          "source": "devices",
+          "label": {
+            "en": "Thermostat",
+            "fr": "Thermostat",
+            "de": "Thermostat",
+            "es": "Termostato"
+          },
+          "description": {
+            "en": "An ecobee thermostat (a remote sensor stands for its thermostat).",
+            "fr": "Un thermostat ecobee (un capteur de pièce vaut pour son thermostat).",
+            "de": "Ein ecobee-Thermostat (ein Raumsensor steht für sein Thermostat).",
+            "es": "Un termostato ecobee (un sensor remoto vale por su termostato)."
+          },
+          "required": true
         }
       ]
     }
   ],
   "widgets": [
     {
-      "key": "demo_status",
-      "label": { "en": "Demo status", "fr": "État de la démo" },
-      "description": {
-        "en": "Live temperature and plug power, plug connection and observed location.",
-        "fr": "Température et puissance en direct, connexion de la prise, position observée."
+      "key": "thermostat",
+      "label": {
+        "en": "ecobee thermostat",
+        "fr": "Thermostat ecobee",
+        "de": "ecobee-Thermostat",
+        "es": "Termostato ecobee"
       },
-      "icon": "activity",
-      "action_timeout_seconds": 15
+      "description": {
+        "en": "Temperature, setpoint up and down, mode and comfort setting of a thermostat.",
+        "fr": "Température, consigne plus ou moins, mode et mode confort d’un thermostat.",
+        "de": "Temperatur, Sollwert hoch und runter, Modus und Komfort eines Thermostats.",
+        "es": "Temperatura, consigna más o menos, modo y ajuste de confort de un termostato."
+      },
+      "icon": "thermometer",
+      "settings": [
+        {
+          "key": "thermostat",
+          "type": "select",
+          "source": "devices",
+          "label": {
+            "en": "Thermostat",
+            "fr": "Thermostat",
+            "de": "Thermostat",
+            "es": "Termostato"
+          },
+          "required": true
+        }
+      ],
+      "action_timeout_seconds": 30
     }
   ]
 }

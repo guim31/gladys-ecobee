@@ -1,41 +1,79 @@
 // -----------------------------------------------------------------------------
-// Scene actions (SDK v0.14+, Gladys 5.1+).
+// The scene actions (manifest `scene_actions`). What a feature cannot say:
+// a comfort setting held for a chosen time, a vacation, back to the program
+// with every hold cancelled. The setpoint, the mode and the fan stay device
+// features, set from a scene with the core's "control a device" action.
 //
-// A scene action is an OPERATION a scene author places in a scene, with
-// parameters and a result: "identify this device", "take a snapshot", "clean
-// these rooms". Each one is declared in the manifest `scene_actions` field
-// (key, label, `fields` in the config_schema grammar, scalar `outputs`) and
-// handled here, keyed by that same `key`; index.js registers every entry with
-// `gladys.onSceneAction(key, ...)`.
-//
-// Scene TRIGGERS are the other direction ("this happened"): they are fired by
-// the device that observes the event, see src/devices/motionSensor.js.
-//
-// The rules that matter:
-//   - `fields` arrive RESOLVED: scene variables substituted, defaults applied,
-//     validated by the core; a `"source": "devices"` field is the chosen
-//     device external_id;
-//   - resolve an object of the declared `outputs` (scalars only), readable by
-//     the following actions of the scene, or `undefined` for none. Keys not
-//     declared in the manifest are dropped by the core;
-//   - throwing fails THIS action only: the scene logs it and continues. A
-//     scene action is never a condition: return an output and let the scene
-//     author gate on it;
-//   - never fire a scene event as a consequence of a received action: a scene
-//     bound to that event would loop through the integration.
+// Every action takes a `thermostat` field (source: devices): a remote sensor
+// picked there stands for its thermostat.
 // -----------------------------------------------------------------------------
 
-import { createLogger } from '@gladysassistant/integration-sdk';
-import { signalDevice } from './devices/index.js';
+import {
+  CommandError,
+  cancelVacationCommand,
+  climateCommand,
+  resumeCommand,
+  vacationCommand,
+} from './commands.js';
+import { vacationWindow } from './ecobee/model.js';
+import { failure } from './i18n.js';
 
-const logger = createLogger({ name: 'scenes' });
+/** The durations the set_comfort action offers, `default` being the configuration's. */
+export const COMFORT_DURATIONS = ['default', 'next_transition', 'indefinite', 'hours_2', 'hours_4'];
+
+async function run(hub, fields, build) {
+  const snapshot = hub.commandTarget(fields.thermostat);
+  let update;
+  try {
+    update = build(snapshot);
+  } catch (err) {
+    throw err instanceof CommandError ? failure(err.text, hub.language) : err;
+  }
+  await hub.send(snapshot, update);
+  return snapshot;
+}
 
 export const SCENE_ACTIONS = {
-  // The ack is awaited under the action's `timeout_seconds` (15 s in the
-  // manifest), counted from the moment the scene reaches the action.
-  async identify_device(gladys, { fields, config }) {
-    logger.info(`Scene action identify_device <- ${fields.device}`);
-    const signalled = await signalDevice(gladys, fields.device, config);
-    return { signalled };
+  async resume_program(hub, { fields }) {
+    const snapshot = await run(hub, fields, (target) => resumeCommand(target));
+    hub.logger.info(`Scene: resume the program of ${snapshot.name}`);
+  },
+
+  async set_comfort(hub, { fields }) {
+    const duration =
+      !fields.duration || fields.duration === 'default'
+        ? hub.config.hold_duration
+        : fields.duration;
+    const snapshot = await run(hub, fields, (target) =>
+      climateCommand(target, fields.comfort, duration),
+    );
+    hub.logger.info(`Scene: comfort setting ${fields.comfort} (${duration}) on ${snapshot.name}`);
+  },
+
+  async start_vacation(hub, { fields }) {
+    const days = Math.max(1, Math.round(Number(fields.days) || 1));
+    let end;
+    const snapshot = await run(hub, fields, (target) => {
+      const window = vacationWindow(target.thermostatTime, days);
+      end = window.endDate;
+      return vacationCommand(
+        target,
+        {
+          days,
+          heat: fields.heat_setpoint,
+          cool: fields.cool_setpoint,
+          // Unique per thermostat: ecobee refuses two vacations of one name.
+          name: `Gladys ${window.startDate}`,
+        },
+        hub.config,
+      );
+    });
+    hub.logger.info(`Scene: vacation of ${days} day(s) on ${snapshot.name}`);
+    return { end_date: end };
+  },
+
+  async cancel_vacation(hub, { fields }) {
+    const snapshot = await run(hub, fields, (target) => cancelVacationCommand(target));
+    hub.logger.info(`Scene: vacation cancelled on ${snapshot.name}`);
   },
 };

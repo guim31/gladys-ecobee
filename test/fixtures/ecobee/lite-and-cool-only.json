@@ -1,0 +1,157 @@
+{
+  "page": { "page": 1, "totalPages": 1, "pageSize": 2, "total": 2 },
+  "thermostatList": [
+    {
+      "identifier": "311500000303",
+      "name": "Basement",
+      "modelNumber": "nikeSmart",
+      "brand": "ecobee",
+      "thermostatTime": "2026-10-14 13:05:00",
+      "utcTime": "2026-10-14 17:05:00",
+      "alerts": [],
+      "settings": {
+        "hvacMode": "off",
+        "coolStages": 0,
+        "heatStages": 1,
+        "hasHeatPump": false,
+        "hasForcedAir": false,
+        "hasBoiler": true,
+        "useCelsius": false,
+        "heatCoolMinDelta": 50,
+        "holdAction": "useEndTime2hour",
+        "heatRangeHigh": 790,
+        "heatRangeLow": 450,
+        "coolRangeHigh": 920,
+        "coolRangeLow": 650,
+        "ventilatorType": "none"
+      },
+      "runtime": {
+        "connected": true,
+        "actualTemperature": 642,
+        "actualHumidity": 47,
+        "desiredHeat": 620,
+        "desiredCool": 780,
+        "desiredFanMode": "auto"
+      },
+      "equipmentStatus": "",
+      "events": [],
+      "program": {
+        "climates": [
+          {
+            "name": "Home",
+            "climateRef": "home",
+            "isOccupied": true,
+            "coolTemp": 780,
+            "heatTemp": 680
+          },
+          {
+            "name": "Away",
+            "climateRef": "away",
+            "isOccupied": false,
+            "coolTemp": 820,
+            "heatTemp": 600
+          },
+          {
+            "name": "Sleep",
+            "climateRef": "sleep",
+            "isOccupied": true,
+            "coolTemp": 800,
+            "heatTemp": 620
+          }
+        ],
+        "currentClimateRef": "sleep"
+      },
+      "remoteSensors": [
+        {
+          "id": "ei:0",
+          "name": "Basement",
+          "type": "thermostat",
+          "inUse": true,
+          "capability": [
+            { "id": "1", "type": "temperature", "value": "642" },
+            { "id": "2", "type": "humidity", "value": "47" }
+          ]
+        }
+      ]
+    },
+    {
+      "identifier": "311500000404",
+      "name": "Sunroom",
+      "modelNumber": "attisPro",
+      "brand": "ecobee",
+      "thermostatTime": "2026-10-14 13:05:00",
+      "utcTime": "2026-10-14 17:05:00",
+      "alerts": [],
+      "settings": {
+        "hvacMode": "cool",
+        "coolStages": 1,
+        "heatStages": 0,
+        "hasHeatPump": false,
+        "useCelsius": false,
+        "heatCoolMinDelta": 50,
+        "holdAction": "askMe",
+        "coolRangeHigh": 920,
+        "coolRangeLow": 650,
+        "ventilatorType": "none"
+      },
+      "runtime": {
+        "connected": false,
+        "actualTemperature": 801,
+        "actualHumidity": 52,
+        "desiredHeat": 450,
+        "desiredCool": 820,
+        "desiredFanMode": "auto"
+      },
+      "equipmentStatus": "compCool1,fan",
+      "events": [
+        {
+          "type": "vacation",
+          "name": "Summer cabin",
+          "running": true,
+          "startDate": "2026-10-10",
+          "startTime": "09:00:00",
+          "endDate": "2026-10-18",
+          "endTime": "17:00:00",
+          "isOccupied": false,
+          "coolHoldTemp": 820,
+          "heatHoldTemp": 450,
+          "fan": "auto",
+          "holdClimateRef": ""
+        }
+      ],
+      "program": {
+        "climates": [
+          {
+            "name": "Home",
+            "climateRef": "home",
+            "isOccupied": true,
+            "coolTemp": 760,
+            "heatTemp": 450
+          },
+          {
+            "name": "Away",
+            "climateRef": "away",
+            "isOccupied": false,
+            "coolTemp": 820,
+            "heatTemp": 450
+          }
+        ],
+        "currentClimateRef": "away"
+      },
+      "remoteSensors": [
+        {
+          "id": "ei:0",
+          "name": "Sunroom",
+          "type": "thermostat",
+          "inUse": true,
+          "capability": [
+            { "id": "1", "type": "temperature", "value": "801" },
+            { "id": "2", "type": "humidity", "value": "52" },
+            { "id": "3", "type": "occupancy", "value": "false" }
+          ]
+        }
+      ]
+    }
+  ],
+  "status": { "code": 0, "message": "" }
+}
