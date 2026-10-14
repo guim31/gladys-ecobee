@@ -1,0 +1,148 @@
+{
+  "page": { "page": 1, "totalPages": 1, "pageSize": 1, "total": 1 },
+  "thermostatList": [
+    {
+      "identifier": "521700000202",
+      "name": "Maison",
+      "thermostatRev": "261014090102",
+      "isRegistered": true,
+      "modelNumber": "aresSmart",
+      "brand": "ecobee",
+      "features": "Home,HomeKit,Alexa,Siri",
+      "lastModified": "2026-10-14 09:01:02",
+      "thermostatTime": "2026-10-14 22:15:30",
+      "utcTime": "2026-10-15 02:15:30",
+      "alerts": [],
+      "settings": {
+        "hvacMode": "auto",
+        "coolStages": 1,
+        "heatStages": 2,
+        "hasHeatPump": false,
+        "hasForcedAir": true,
+        "hasBoiler": false,
+        "hasHumidifier": true,
+        "humidifierMode": "auto",
+        "useCelsius": true,
+        "useTimeFormat12": false,
+        "locale": "fr",
+        "humidity": "35",
+        "fanMinOnTime": 10,
+        "heatCoolMinDelta": 40,
+        "holdAction": "indefinite",
+        "heatRangeHigh": 790,
+        "heatRangeLow": 450,
+        "coolRangeHigh": 920,
+        "coolRangeLow": 650,
+        "autoAway": false,
+        "followMeComfort": true,
+        "ventilatorType": "none",
+        "isVentilatorTimerOn": false
+      },
+      "runtime": {
+        "connected": true,
+        "actualTemperature": 689,
+        "actualHumidity": 38,
+        "desiredHeat": 644,
+        "desiredCool": 770,
+        "desiredHumidity": 35,
+        "desiredFanMode": "on",
+        "actualVOC": 512,
+        "actualCO2": 731,
+        "actualAQAccuracy": 3,
+        "actualAQScore": 82
+      },
+      "equipmentStatus": "fan",
+      "events": [
+        {
+          "type": "hold",
+          "name": "auto",
+          "running": true,
+          "startDate": "2026-10-14",
+          "startTime": "21:58:44",
+          "endDate": "2035-01-01",
+          "endTime": "00:00:00",
+          "isOccupied": true,
+          "isCoolOff": false,
+          "isHeatOff": false,
+          "coolHoldTemp": 770,
+          "heatHoldTemp": 644,
+          "fan": "on",
+          "vent": "off",
+          "isTemperatureAbsolute": false,
+          "holdClimateRef": "sleep"
+        },
+        {
+          "type": "vacation",
+          "name": "Ski trip",
+          "running": false,
+          "startDate": "2027-01-02",
+          "startTime": "08:00:00",
+          "endDate": "2027-01-09",
+          "endTime": "17:00:00",
+          "isOccupied": false,
+          "coolHoldTemp": 900,
+          "heatHoldTemp": 550,
+          "fan": "auto",
+          "holdClimateRef": ""
+        }
+      ],
+      "program": {
+        "climates": [
+          {
+            "name": "Domicile",
+            "climateRef": "home",
+            "isOccupied": true,
+            "coolTemp": 760,
+            "heatTemp": 680,
+            "sensors": [{ "id": "ei:0:1", "name": "Maison" }]
+          },
+          {
+            "name": "Absent",
+            "climateRef": "away",
+            "isOccupied": false,
+            "coolTemp": 820,
+            "heatTemp": 610,
+            "sensors": [{ "id": "ei:0:1", "name": "Maison" }]
+          },
+          {
+            "name": "Sommeil",
+            "climateRef": "sleep",
+            "isOccupied": true,
+            "coolTemp": 770,
+            "heatTemp": 644,
+            "sensors": [{ "id": "rs2:100:1", "name": "Chambre" }]
+          }
+        ],
+        "currentClimateRef": "home"
+      },
+      "remoteSensors": [
+        {
+          "id": "ei:0",
+          "name": "Maison",
+          "type": "thermostat",
+          "inUse": true,
+          "capability": [
+            { "id": "1", "type": "temperature", "value": "689" },
+            { "id": "2", "type": "humidity", "value": "38" },
+            { "id": "3", "type": "occupancy", "value": "true" },
+            { "id": "4", "type": "airQuality", "value": "82" },
+            { "id": "5", "type": "co2PPM", "value": "731" },
+            { "id": "6", "type": "vocPPM", "value": "512" }
+          ]
+        },
+        {
+          "id": "rs2:100",
+          "name": "Chambre",
+          "type": "ecobee3_remote_sensor",
+          "code": "ZM8W",
+          "inUse": true,
+          "capability": [
+            { "id": "1", "type": "temperature", "value": "662" },
+            { "id": "2", "type": "occupancy", "value": "false" }
+          ]
+        }
+      ]
+    }
+  ],
+  "status": { "code": 0, "message": "" }
+}

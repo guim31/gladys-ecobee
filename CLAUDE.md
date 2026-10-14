@@ -31,16 +31,26 @@ pushing.
 ## Architecture
 
 ```
-index.js                          SDK wiring only: handlers registered before connect()
-src/devices/index.js              registry of the device blueprints + dispatch helpers
-src/devices/<type>.js             one device type per file (buildDevice, onPoll, onSetValue...)
-src/scenes.js                     scene action handlers (manifest `scene_actions`)
-src/widgets.js                    dashboard widget handlers (manifest `widgets`)
+index.js                          SDK wiring only: registerHandlers(), then connect()
+src/app.js                        every SDK handler, registered before connect(); the tests use it too
+src/hub.js                        the account: sign-in state, own refresh timer, states, triggers, commands
+src/ecobee/auth.js                Auth0 account sign-in (PKCE, MFA), PIN flow of a developer API key
+src/ecobee/session.js             tokens, renewal, re-sign-in, account fingerprint
+src/ecobee/api.js                 GET/POST api.ecobee.com/1/thermostat
+src/ecobee/model.js               thermostat object -> snapshot, °F tenths conversions, holds
+src/ecobee/http.js, errors.js     fetch with timeout (no URL in errors), error kinds
+src/devices.js                    snapshots -> Gladys devices and states (feature keys are forever)
+src/commands.js                   what to send for each command (pure functions)
+src/scenes.js                     scene actions (manifest `scene_actions`)
+src/widgets.js                    the "thermostat" widget (manifest `widgets`)
+src/i18n.js                       every user-facing text, en/fr/de/es
 src/config.js                     DEFAULT_CONFIG (mirrors the manifest defaults) + normalization
-src/weather.js                    example driver (Open-Meteo)
+src/store.js                      /data/ecobee-session.json
+src/issues.js                     deduplicated problem logging
+scripts/probe.mjs                 read-only probe of the real ecobee services
 gladys-assistant-integration.json manifest: name, config_schema, actions, image...
-docs/en.md, docs/fr.md            user documentation, re-hosted by Gladys (mandatory)
-test/                             node --test, against the SDK's fake Gladys (integration-sdk/testing)
+docs/{en,fr,de,es}.md             user documentation, re-hosted by Gladys, same sections
+test/                             node --test, against the SDK's fake Gladys and test/helpers/fakeEcobee.js
 .github/scripts/release.mjs       release helpers (manifest bump, changelog), tested in test/
 ```
 
@@ -70,8 +80,9 @@ test/                             node --test, against the SDK's fake Gladys (in
   `type: "provider"`: 5.1.0). `test/manifest.test.js` ties the manifest to the
   code (defaults, action, scene and widget handlers): change both sides
   together.
-- **User-facing text** is bilingual (English and French): action messages,
-  manifest texts, and `docs/en.md` / `docs/fr.md`, kept in sync.
+- **User-facing text** exists in English, French, German and Spanish: action
+  messages, manifest texts, widget texts, feature names, and
+  `docs/{en,fr,de,es}.md`, kept in sync (`test/i18n.test.js`).
 - **Style.** Prettier formats, ESLint catches mistakes. Comments explain why,
   in English. Tests never touch the network.
 
@@ -233,3 +244,40 @@ long, et sur un « Sie »/« Ihr… » de politesse en allemand. Le store exige 
 - Docs `en`, `fr`, `de`, `es` avec les mêmes sections.
 - Chauffe, ouverture, sécurité : ne rien rendre pilotable « comme un thermostat » ou par un assistant
   vocal quand une erreur serait dangereuse (leçon d'OctoPrint).
+
+## ecobee (propre à cette intégration)
+
+**Authentification (tranchée le 14/10/2026).** ecobee a fermé son programme développeur aux nouvelles
+clés en 2024. Voie principale : la connexion du portail web, Auth0 universal login sur `auth.ecobee.com`
+avec le client public du portail (`183eORFPlXyz9BbDZwqexHPBQoVjgadh`, redirect
+`https://www.ecobee.com/home/authCallback`, audience `https://prod.ecobee.com/api/v1`), code
+d’autorisation + PKCE, étapes `/u/login/identifier` puis `/u/login/password`, puis éventuellement
+`/u/mfa-otp-challenge` ou `/u/mfa-sms-challenge`, puis `/oauth/token`. C’est ce que font
+`python-ecobee-api` 0.4.4 (09/10/2026) et Home Assistant. Les redirections se suivent **à la main**
+(`redirect: 'manual'`) en gardant les cookies Auth0, et on s’arrête dès qu’on quitte `auth.ecobee.com` :
+la callback se lit, ne se charge pas. Voie secondaire : clé d’API développeur existante + PIN
+(`api.ecobee.com/authorize?response_type=ecobeePin`, puis `/token` en paramètres de requête).
+
+**Pièges découverts**
+
+- Un mot de passe refusé n’est **jamais** réessayé seul (verrouillage du compte) : seul un nouvel
+  enregistrement de la configuration relance.
+- Un code SMS appartient à **une** transaction Auth0 (~10 min) ; passé ce délai, une nouvelle connexion
+  envoie un nouveau SMS. Un code d’application TOTP, lui, vaut pour une nouvelle transaction.
+- Toutes les températures de l’API sont en **dixièmes de °F**, consignes comprises ; -5002 (inconnu) et
+  -5003 (calibrage) ne sont pas des mesures ; les capteurs donnent des chaînes (`"712"`, `"unknown"`).
+- `setHold` exige **les deux** consignes (chaud et froid) ; en auto, froid ≥ chaud + `heatCoolMinDelta`.
+  Le mode ventilation passe aussi par `setHold` et **est ignoré sans les consignes** (relevé par HA).
+- Le premier événement `running` de `events` est celui qui prime ; un maintien « permanent » finit des
+  années plus tard (heuristique HA : plus d’un an).
+- Les vacances ne s’annulent pas par `resumeProgram` mais par `deleteVacation` (par nom, unique par
+  thermostat).
+- Rythme : ecobee demande **3 minutes** minimum entre deux lectures. Le minuteur interne lit à
+  `refresh_minutes` ; `onPoll` du cœur (60 s) ne lit que si rien n’a été lu depuis une période entière.
+- Le widget en mode auto a deux consignes : 3 tuiles + 1 statut + 4 boutons = 8, l’humidité passe alors
+  dans le statut. Les libellés d’un formulaire de bouton (`fields`, options) doivent être des objets
+  multilingues avec `en` (`validateWidgetContent` le vérifie), pas des chaînes.
+- Le résultat d’une action arrive dans l’ack sous `data.message`, d’une action de scène sous
+  `data.outputs`, un widget sous `data.content` (faux Gladys du SDK).
+- Le proxy de la session refuse `api.ecobee.com` et `auth.ecobee.com` : `scripts/probe.mjs` est à lancer
+  ailleurs.
