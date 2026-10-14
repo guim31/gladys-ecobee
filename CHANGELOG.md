@@ -10,6 +10,8 @@ the notes of the version's GitHub Release.
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-14
+
 ### Added
 
 - ecobee thermostats and SmartSensors in Gladys (5.2.0 or later), through the
@@ -36,4 +38,5 @@ the notes of the version's GitHub Release.
   for), configurable, and publishes only the changes.
 - Documentation in English, French, German and Spanish.
 
-[Unreleased]: https://github.com/guim31/gladys-ecobee/commits/main
+[Unreleased]: https://github.com/guim31/gladys-ecobee/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/guim31/gladys-ecobee/releases/tag/v1.0.1
